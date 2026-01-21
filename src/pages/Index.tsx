@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import AuthPhone from '@/components/AuthPhone';
+import CreateGroup from '@/components/CreateGroup';
 
 interface Chat {
   id: number;
@@ -14,6 +16,8 @@ interface Chat {
   unread: number;
   online: boolean;
   avatar: string;
+  isGroup?: boolean;
+  members?: number;
 }
 
 interface Message {
@@ -28,9 +32,11 @@ interface Message {
 }
 
 const Index = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [selectedChat, setSelectedChat] = useState<number>(1);
   const [messageText, setMessageText] = useState('');
   const [showProfile, setShowProfile] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingType, setRecordingType] = useState<'voice' | 'video' | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -39,13 +45,13 @@ const Index = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
 
-  const chats: Chat[] = [
+  const [chats, setChats] = useState<Chat[]>([
     { id: 1, name: 'Анна Смирнова', lastMessage: 'Встретимся завтра?', time: '14:32', unread: 2, online: true, avatar: 'АС' },
-    { id: 2, name: 'Команда проекта', lastMessage: 'Новый дизайн готов', time: '13:15', unread: 0, online: false, avatar: 'КП' },
+    { id: 2, name: 'Команда проекта', lastMessage: 'Новый дизайн готов', time: '13:15', unread: 0, online: false, avatar: 'КП', isGroup: true, members: 5 },
     { id: 3, name: 'Михаил Иванов', lastMessage: 'Отправил документы', time: '11:20', unread: 1, online: true, avatar: 'МИ' },
     { id: 4, name: 'Елена Петрова', lastMessage: 'Спасибо за помощь!', time: 'Вчера', unread: 0, online: false, avatar: 'ЕП' },
     { id: 5, name: 'Дмитрий Козлов', lastMessage: 'Созвонимся в 15:00', time: 'Вчера', unread: 0, online: true, avatar: 'ДК' },
-  ];
+  ]);
 
   const messages: Message[] = [
     { id: 1, text: 'Привет! Как дела?', time: '14:20', isMine: false, encrypted: true, type: 'text' },
@@ -136,7 +142,28 @@ const Index = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleCreateGroup = (name: string, members: number[]) => {
+    const newGroup: Chat = {
+      id: Date.now(),
+      name,
+      lastMessage: 'Группа создана',
+      time: 'Сейчас',
+      unread: 0,
+      online: false,
+      avatar: name.slice(0, 2).toUpperCase(),
+      isGroup: true,
+      members: members.length + 1
+    };
+    setChats([newGroup, ...chats]);
+    setShowCreateGroup(false);
+    setSelectedChat(newGroup.id);
+  };
+
   const currentChat = chats.find(c => c.id === selectedChat);
+
+  if (!isAuthenticated) {
+    return <AuthPhone onAuthSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -145,7 +172,12 @@ const Index = () => {
         <Button variant="ghost" size="icon" className="w-12 h-12 rounded-xl bg-sidebar-primary hover:bg-sidebar-primary/90">
           <Icon name="MessageSquare" size={24} />
         </Button>
-        <Button variant="ghost" size="icon" className="w-12 h-12 rounded-xl hover:bg-sidebar-accent">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="w-12 h-12 rounded-xl hover:bg-sidebar-accent"
+          onClick={() => setShowCreateGroup(true)}
+        >
           <Icon name="Users" size={24} />
         </Button>
         <Button variant="ghost" size="icon" className="w-12 h-12 rounded-xl hover:bg-sidebar-accent">
@@ -180,11 +212,22 @@ const Index = () => {
                   <Avatar className="w-12 h-12">
                     <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">{chat.avatar}</AvatarFallback>
                   </Avatar>
-                  {chat.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />}
+                  {chat.isGroup ? (
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-sidebar-primary rounded-full flex items-center justify-center border-2 border-card">
+                      <Icon name="Users" size={12} />
+                    </div>
+                  ) : (
+                    chat.online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-semibold text-sm truncate">{chat.name}</h3>
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm truncate">{chat.name}</h3>
+                      {chat.isGroup && (
+                        <span className="text-xs text-muted-foreground flex-shrink-0">({chat.members})</span>
+                      )}
+                    </div>
                     <span className="text-xs text-muted-foreground ml-2">{chat.time}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -211,7 +254,12 @@ const Index = () => {
               <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground">{currentChat?.avatar}</AvatarFallback>
             </Avatar>
             <div>
-              <h2 className="font-semibold">{currentChat?.name}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">{currentChat?.name}</h2>
+                {currentChat?.isGroup && (
+                  <span className="text-xs text-muted-foreground">({currentChat?.members})</span>
+                )}
+              </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Icon name="Shield" size={12} className="text-green-500" />
                 <span>Сквозное шифрование</span>
@@ -392,8 +440,25 @@ const Index = () => {
               </div>
               <p className="text-sm text-muted-foreground">Управление доступом к данным</p>
             </div>
+            <div className="bg-background rounded-lg p-4 border border-sidebar-primary/30">
+              <div className="flex items-center gap-3 mb-2">
+                <Icon name="Lock" size={20} className="text-sidebar-primary" />
+                <span className="font-semibold">Облачный пароль</span>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">Дополнительная защита для всех устройств</p>
+              <Button variant="outline" className="w-full" size="sm">
+                Изменить пароль
+              </Button>
+            </div>
           </div>
         </div>
+      )}
+
+      {showCreateGroup && (
+        <CreateGroup 
+          onClose={() => setShowCreateGroup(false)}
+          onCreate={handleCreateGroup}
+        />
       )}
     </div>
   );
